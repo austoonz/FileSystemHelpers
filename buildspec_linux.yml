@@ -1,0 +1,23 @@
+version: 0.2
+
+phases:
+
+  install:
+    commands:
+      - export PATH="$PATH:/root/.dotnet/tools"
+      - dotnet tool install PowerShell --global --version 7.0.6
+
+  pre_build:
+    commands:
+      - pwsh -command './configure_aws_credential.ps1'
+      - pwsh -command './install_nuget.ps1'
+      - pwsh -command './install_modules.ps1'
+
+  build:
+    commands:
+      - pwsh -command 'Invoke-Build'
+
+artifacts:
+  files:
+    - '**/*'
+  base-directory: 'DeploymentArtifacts'
