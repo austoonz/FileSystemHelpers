@@ -15,19 +15,25 @@ InModuleScope -ModuleName 'FileSystemHelpers' -ScriptBlock {
     Describe -Name 'New-TempPath' -Fixture {
         Context -Name 'Happy Path' -Fixture {
             Mock -CommandName GetTempPath -MockWith {
-                'TestDrive:\'
+                'TestDrive:'
             }
+
+            $separator = [System.IO.Path]::DirectorySeparatorChar
 
             It -Name 'Returns a temporary path' -Test {
                 $assertion = New-TempPath
                 $assertion | Should -Not -BeNullOrEmpty
-                $assertion | Should -Match '^TestDrive:\\[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}$'
+
+                $regex = "^TestDrive(:|:\$separator)[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}$"
+                $assertion | Should -Match $regex
             }
 
             It -Name 'Returns a temporary path with a file extension' -Test {
                 $assertion = New-TempPath -Extension 'txt'
                 $assertion | Should -Not -BeNullOrEmpty
-                $assertion | Should -Match '^TestDrive:\\[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}\.txt$'
+
+                $regex = "^TestDrive(:|:\$separator)[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}\.txt$"
+                $assertion | Should -Match $regex
             }
         }
 
