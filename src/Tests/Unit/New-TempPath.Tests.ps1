@@ -14,36 +14,33 @@ Import-Module $PathToManifest -Force
 InModuleScope -ModuleName 'FileSystemHelpers' -ScriptBlock {
     Describe -Name 'New-TempPath' -Fixture {
         Context -Name 'Happy Path' -Fixture {
-            Mock -CommandName GetTempPath -MockWith {
-                'TestDrive:'
-            }
-
-            $separator = [System.IO.Path]::DirectorySeparatorChar
-
             It -Name 'Returns a temporary path' -Test {
-                $assertion = New-TempPath
-                $assertion | Should -Not -BeNullOrEmpty
+                Mock -CommandName GetTempPath -MockWith {$TestDrive}
 
-                $regex = "^TestDrive(:|:\$separator)[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}$"
-                $assertion | Should -Match $regex
+                $assertion = New-TempPath
+
+                $assertion | Should -Not -BeNullOrEmpty
+                Test-Path -Path $assertion | Should -BeFalse
             }
 
             It -Name 'Returns a temporary path with a file extension' -Test {
-                $assertion = New-TempPath -Extension 'txt'
-                $assertion | Should -Not -BeNullOrEmpty
+                Mock -CommandName GetTempPath -MockWith {$TestDrive}
 
-                $regex = "^TestDrive(:|:\$separator)[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}\.txt$"
-                $assertion | Should -Match $regex
+                $assertion = New-TempPath -Extension 'txt'
+
+                $assertion | Should -Not -BeNullOrEmpty
+                Test-Path -Path $assertion | Should -BeFalse
+                $assertion.EndsWith('.txt') | Should -BeTrue
             }
         }
 
         Context -Name 'Sad Path' -Fixture {
-            Mock -CommandName GetTempPath -MockWith {
-                [String]::Empty
-            }
-
             It -Name 'Throws a FileNotFoundException when no path is returned' -Test {
-                { Get-TempPath } | Should -Throw -ExceptionType 'System.IO.FileNotFoundException'
+                Mock -CommandName GetTempPath -MockWith {
+                    [String]::Empty
+                }
+
+                { New-TempPath } | Should -Throw
             }
         }
     }

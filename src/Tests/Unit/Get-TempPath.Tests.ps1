@@ -12,26 +12,26 @@ if (Get-Module -Name $ModuleName -ErrorAction 'SilentlyContinue')
 Import-Module $PathToManifest -Force
 
 InModuleScope -ModuleName 'FileSystemHelpers' -ScriptBlock {
-    Describe -Name 'New-TempPath' -Fixture {
+    Describe -Name 'Get-TempPath' -Fixture {
         Context -Name 'Happy Path' -Fixture {
-            Mock -CommandName GetTempPath -MockWith {
-                'TestDrive:\'
-            }
-
-            $assertion = Get-TempPath
-
             It -Name 'Returns a temporary path' -Test {
+                Mock -CommandName GetTempPath -MockWith {
+                    $TestDrive
+                }
+
+                $assertion = Get-TempPath
+
                 $assertion | Should -Not -BeNullOrEmpty
-                $assertion | Should -BeExactly 'TestDrive:\'
+                Test-Path -Path $assertion -PathType Container | Should -BeTrue
             }
         }
 
         Context -Name 'Sad Path' -Fixture {
-            Mock -CommandName GetTempPath -MockWith {
-                [String]::Empty
-            }
-
             It -Name 'Throws a FileNotFoundException when no path is returned' -Test {
+                Mock -CommandName GetTempPath -MockWith {
+                    [String]::Empty
+                }
+
                 { Get-TempPath } | Should -Throw -ExceptionType 'System.IO.FileNotFoundException'
             }
         }

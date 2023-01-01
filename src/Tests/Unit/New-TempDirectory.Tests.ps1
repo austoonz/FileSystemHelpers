@@ -14,27 +14,29 @@ Import-Module $PathToManifest -Force
 InModuleScope -ModuleName 'FileSystemHelpers' -ScriptBlock {
     Describe -Name 'New-TempDirectory' -Fixture {
         Context -Name 'Happy Path' -Fixture {
-            Mock -CommandName GetTempPath -MockWith {
-                'TestDrive:\'
-            }
-
             It -Name 'Returns a DirectoryInfo object' -Test {
+                Mock -CommandName GetTempPath -MockWith {$TestDrive}
+
                 $assertion = New-TempDirectory
                 $assertion | Should -BeOfType 'System.IO.DirectoryInfo'
             }
 
             It -Name 'Returns a temporary directory that exists' -Test {
+                Mock -CommandName GetTempPath -MockWith {
+                    $TestDrive
+                }
+
                 $assertion = New-TempDirectory
                 Test-Path -Path $assertion -PathType 'Container' | Should -BeTrue
             }
         }
 
         Context -Name 'Sad Path' -Fixture {
-            Mock -CommandName GetTempPath -MockWith {
-                [String]::Empty
-            }
-
             It -Name 'Throws a FileNotFoundException when no path is returned' -Test {
+                Mock -CommandName GetTempPath -MockWith {
+                    [String]::Empty
+                }
+
                 { New-TempDirectory } | Should -Throw -ExceptionType 'System.IO.FileNotFoundException'
             }
         }

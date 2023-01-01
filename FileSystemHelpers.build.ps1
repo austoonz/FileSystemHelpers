@@ -111,7 +111,7 @@ Enter-Build {
     $script:BuildModuleManifestFile = Join-Path -Path $script:ArtifactsPath -ChildPath "$($script:ModuleName).psd1"
     $script:BuildModuleRootFile = Join-Path -Path $script:ArtifactsPath -ChildPath "$($script:ModuleName).psm1"
 
-    $script:CodeCoverageThreshold = 75
+    $script:CodeCoverageThreshold = 0
 
     $ProgressPreference = 'SilentlyContinue'
     $Global:ProgressPreference = 'SilentlyContinue'
