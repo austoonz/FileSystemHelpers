@@ -72,10 +72,17 @@ Enter-Build {
     $script:ModuleManifestFile = Join-Path -Path $script:ModuleSourcePath -ChildPath "$($script:ModuleName).psd1"
     Import-Module $script:ModuleManifestFile
 
-    $manifestInfo = Import-PowerShellDataFile -Path $script:ModuleManifestFile
-    $script:ModuleVersion = $manifestInfo.ModuleVersion
-    $script:ModuleDescription = $manifestInfo.Description
-    $Script:FunctionsToExport = $manifestInfo.FunctionsToExport
+    if ($PSVersionTable.PSVersion.Major -ge 7) {
+        $manifestInfo = Import-PowerShellDataFile -Path $script:ModuleManifestFile
+        $script:ModuleVersion = $manifestInfo.ModuleVersion
+        $script:ModuleDescription = $manifestInfo.Description
+        $Script:FunctionsToExport = $manifestInfo.FunctionsToExport
+    } else {
+        $manifestInfo = Test-ModuleManifest -Path $script:ModuleManifestFile
+        $script:ModuleVersion = [string]$manifestInfo.Version
+        $script:ModuleDescription = $manifestInfo.Description
+        $Script:FunctionsToExport = ($manifestInfo.ExportedCommands.Values | Where-Object {$_.CommandType -eq 'Function'}).Name
+    }
 
     $script:TestsPath = Join-Path -Path $script:SourcePath -ChildPath 'Tests'
     $script:UnitTestsPath = Join-Path -Path $script:TestsPath -ChildPath 'Unit'
@@ -217,15 +224,6 @@ task Test {
         $pesterConfiguration.CodeCoverage.OutputPath = Join-Path -Path $script:RepositoryRoot -ChildPath 'coverage.xml'
         $pesterConfiguration.CodeCoverage.OutputFormat = $outputFormat
         $pesterConfiguration.CodeCoverage.Path = (Get-ChildItem -Path $script:ModuleSourcePath -Filter '*.ps1' -Recurse).FullName
-        #$script:ModuleSourcePath
-        # if ($env:CI -and $IsMacOS) {
-        #     # the MacOS github action does not properly detect the relative path.
-        #     Write-Build White "           CI: $env:CI and MacOS action detected. Hard coding path."
-        #     $pesterConfiguration.CodeCoverage.Path = "/Users/runner/work/Catesta/Catesta/src/Catesta/*/*.ps1"
-        # }
-        # else {
-        #     $pesterConfiguration.CodeCoverage.Path = $script:ModuleSourcePath
-        # }
         $pesterConfiguration.TestResult.Enabled = $true
         $pesterConfiguration.TestResult.OutputPath = Join-Path -Path $script:RepositoryRoot -ChildPath 'test_report.xml'
         $pesterConfiguration.TestResult.OutputFormat = 'JUnitXml'
