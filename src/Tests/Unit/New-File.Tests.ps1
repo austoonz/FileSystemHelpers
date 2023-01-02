@@ -32,12 +32,12 @@ InModuleScope -ModuleName 'FileSystemHelpers' -ScriptBlock {
 
         Context -Name 'Sad Path' -Fixture {
             It -Name 'Throws an exception when a file already exists' -Test {
-                $null = New-Item -Path "$TestDrive\TestFile" -ItemType 'File'
+                Mock TestFileExists {throw}
                 { New-File -Path "$TestDrive\TestFile" } | Should -Throw
             }
 
-            It -Name 'Throws an exception when a file already exists' -Test {
-                $null = New-Item -Path "$TestDrive\TestFile" -ItemType 'Directory'
+            It -Name 'Throws an exception when a directory already exists in the desired location' -Test {
+                Mock TestDirectoryExists {throw}
                 { New-File -Path "$TestDrive\TestFile" } | Should -Throw
             }
         }

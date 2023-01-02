@@ -198,9 +198,6 @@ task AnalyzeTests -After Analyze {
 task Test {
     Write-Host ''
 
-    $codeCoverageOutputFile = Join-Path -Path $script:RepositoryRoot -ChildPath 'cov.xml'
-    #$codeCoverageFiles = (Get-ChildItem -Path $script:ModuleSourcePath -Filter '*.ps1' -Recurse).FullName
-
     if (Test-Path -Path $script:UnitTestsPath) {
         Write-Host ''
         Write-Host '  Pester Unit Tests: Invoking...' -ForegroundColor Green
@@ -217,7 +214,7 @@ task Test {
         $pesterConfiguration.Run.Exit = $false
         $pesterConfiguration.CodeCoverage.Enabled = $true
         $pesterConfiguration.CodeCoverage.CoveragePercentTarget = $script:CodeCoverageThreshold
-        $pesterConfiguration.CodeCoverage.OutputPath = $codeCoverageOutputFile
+        $pesterConfiguration.CodeCoverage.OutputPath = Join-Path -Path $script:RepositoryRoot -ChildPath 'coverage.xml'
         $pesterConfiguration.CodeCoverage.OutputFormat = $outputFormat
         $pesterConfiguration.CodeCoverage.Path = (Get-ChildItem -Path $script:ModuleSourcePath -Filter '*.ps1' -Recurse).FullName
         #$script:ModuleSourcePath
@@ -230,8 +227,8 @@ task Test {
         #     $pesterConfiguration.CodeCoverage.Path = $script:ModuleSourcePath
         # }
         $pesterConfiguration.TestResult.Enabled = $true
-        $pesterConfiguration.TestResult.OutputPath = "PesterTests.xml"
-        $pesterConfiguration.TestResult.OutputFormat = 'NUnitXml'
+        $pesterConfiguration.TestResult.OutputPath = Join-Path -Path $script:RepositoryRoot -ChildPath 'test_report.xml'
+        $pesterConfiguration.TestResult.OutputFormat = 'JUnitXml'
         $pesterConfiguration.Output.Verbosity = 'Detailed'
 
         Write-Build White '      Performing Pester Unit Tests...'

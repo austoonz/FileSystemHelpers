@@ -24,3 +24,10 @@ artifacts:
   files:
     - '**/*'
   base-directory: 'DeploymentArtifacts'
+
+reports:
+  UnitTestReport:
+    files:
+      - 'test_report.xml'
+    discard-paths: yes
+    file-format: JUNITXML
