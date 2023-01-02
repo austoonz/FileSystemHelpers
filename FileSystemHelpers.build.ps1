@@ -43,8 +43,8 @@ Enter-Build {
     Write-Host '  Build Environment: Setting up...' -ForegroundColor Green
 
     Write-Host '    - Importing the AWS Tools for PowerShell...' -ForegroundColor Green
-    if (Get-Module -Name @('AWS.Tools.Common', 'AWS.Tools.SecretsManager') -ListAvailable) {
-        Import-Module -Name @('AWS.Tools.Common', 'AWS.Tools.SecretsManager')
+    if (Get-Module -Name 'AWS.Tools.Common' -ListAvailable) {
+        Import-Module -Name 'AWS.Tools.Common'
     } elseif (($PSEdition -eq 'Desktop') -and (Get-Module -Name 'AWSPowerShell' -ListAvailable)) {
         Import-Module -Name 'AWSPowerShell'
     } elseif (Get-Module -Name 'AWSPowerShell.NetCore' -ListAvailable) {
@@ -206,6 +206,11 @@ task Test {
         Write-Host '  Pester Unit Tests: Invoking...' -ForegroundColor Green
         Write-Host ''
 
+        $outputFormat = 'CoverageGutters'
+        if ($env:CODEBUILD_BUILD_ARN) {
+            $outputFormat = 'JaCoCo'
+        }
+
         $pesterConfiguration = New-PesterConfiguration
         $pesterConfiguration.run.Path = $script:UnitTestsPath
         $pesterConfiguration.Run.PassThru = $true
@@ -213,7 +218,7 @@ task Test {
         $pesterConfiguration.CodeCoverage.Enabled = $true
         $pesterConfiguration.CodeCoverage.CoveragePercentTarget = $script:CodeCoverageThreshold
         $pesterConfiguration.CodeCoverage.OutputPath = $codeCoverageOutputFile
-        $pesterConfiguration.CodeCoverage.OutputFormat = 'CoverageGutters'
+        $pesterConfiguration.CodeCoverage.OutputFormat = $outputFormat
         $pesterConfiguration.CodeCoverage.Path = (Get-ChildItem -Path $script:ModuleSourcePath -Filter '*.ps1' -Recurse).FullName
         #$script:ModuleSourcePath
         # if ($env:CI -and $IsMacOS) {
