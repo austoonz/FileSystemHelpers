@@ -4,3 +4,4 @@ DeploymentArtifacts
 .DS_Store
 .vscode
 cov.xml
+PesterTests.xml
