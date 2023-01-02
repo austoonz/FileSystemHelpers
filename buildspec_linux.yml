@@ -3,6 +3,9 @@ version: 0.2
 phases:
 
   install:
+    runtime-versions:
+      dotnet: 6.x
+
     commands:
       - export PATH="$PATH:/root/.dotnet/tools"
       - dotnet tool install PowerShell --global --version 7.2.8
