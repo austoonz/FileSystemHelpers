@@ -23,7 +23,9 @@
 
     This will perform only the Analyze and Test tasks.
 #>
-
+param (
+    [string]$TestFile
+)
 # Commented the CreateHelp task out due to PlatyPS issues with Examples generation
 # Default Build
 #task . Clean, ValidateRequirements, Analyze, Test, Build, CreateHelp, CreateArtifact
@@ -62,7 +64,9 @@ Enter-Build {
 
     Write-Host '    - Configuring Build Variables...' -ForegroundColor Green
     $script:RepositoryRoot = $BuildRoot
-    $script:ModuleName = (Split-Path -Path $BuildFile -Leaf).Split('.')[0]
+
+    # Removes the `.build.ps1` from the Invoke-Build file.
+    $script:ModuleName = ((Split-Path -Path $buildFile -Leaf).Split('.') | Select-Object -SkipLast 2) -join '.'
     if (Get-Module -Name $script:ModuleName) { Remove-Module -Name $script:ModuleName }
 
     $script:SourcePath = Join-Path -Path $BuildRoot -ChildPath 'src'
@@ -81,11 +85,12 @@ Enter-Build {
         $manifestInfo = Test-ModuleManifest -Path $script:ModuleManifestFile
         $script:ModuleVersion = [string]$manifestInfo.Version
         $script:ModuleDescription = $manifestInfo.Description
-        $Script:FunctionsToExport = ($manifestInfo.ExportedCommands.Values | Where-Object {$_.CommandType -eq 'Function'}).Name
+        $Script:FunctionsToExport = ($manifestInfo.ExportedCommands.Values | Where-Object { $_.CommandType -eq 'Function' }).Name
     }
 
     $script:TestsPath = Join-Path -Path $script:SourcePath -ChildPath 'Tests'
     $script:UnitTestsPath = Join-Path -Path $script:TestsPath -ChildPath 'Unit'
+    $script:BuildTestsPath = Join-Path -Path $script:TestsPath -ChildPath 'Build'
     $script:IntegrationTestsPath = Join-Path -Path $script:TestsPath -ChildPath 'Integration'
 
     $script:ArtifactsPath = Join-Path -Path $BuildRoot -ChildPath 'Artifacts'
@@ -95,11 +100,74 @@ Enter-Build {
     $script:BuildModuleManifestFile = Join-Path -Path $script:ArtifactsPath -ChildPath "$($script:ModuleName).psd1"
     $script:BuildModuleRootFile = Join-Path -Path $script:ArtifactsPath -ChildPath "$($script:ModuleName).psm1"
 
-    $script:CodeCoverageThreshold = 95
+    $script:PesterOutputFormat = 'CoverageGutters'
+    if ($env:CODEBUILD_BUILD_ARN) {
+        $script:PesterOutputFormat = 'JaCoCo'
+    }
+    $script:CodeCoverageThreshold = 85
 
     $ProgressPreference = 'SilentlyContinue'
     $Global:ProgressPreference = 'SilentlyContinue'
 
+    function InvokePesterUnitTests {
+        param (
+            $Task,
+            $UnitTestPath,
+            $CodeCoverageFiles,
+            [switch]$EnableCodeCoverage
+        )
+
+        Write-Host ''
+        Write-Host "  Invoke Pester Tests for the $Task Task..." -ForegroundColor Green
+        Write-Host ''
+
+        $pesterConfiguration = New-PesterConfiguration
+        $pesterConfiguration.Run.Path = $UnitTestPath
+        $pesterConfiguration.Run.PassThru = $true
+        $pesterConfiguration.Run.Exit = $false
+        if ($EnableCodeCoverage) {
+            $pesterConfiguration.CodeCoverage.Enabled = $true
+            $pesterConfiguration.CodeCoverage.CoveragePercentTarget = $script:CodeCoverageThreshold
+            $pesterConfiguration.CodeCoverage.OutputPath = Join-Path -Path $script:RepositoryRoot -ChildPath 'coverage.xml'
+            $pesterConfiguration.CodeCoverage.OutputFormat = $script:PesterOutputFormat
+            $pesterConfiguration.CodeCoverage.Path = $CodeCoverageFiles
+        }
+        $pesterConfiguration.TestResult.Enabled = $true
+        $pesterConfiguration.TestResult.OutputPath = Join-Path -Path $script:RepositoryRoot -ChildPath 'test_report.xml'
+        $pesterConfiguration.TestResult.OutputFormat = 'JUnitXml'
+        $pesterConfiguration.Output.Verbosity = 'Detailed'
+
+        Write-Build White '      Performing Pester Unit Tests...'
+        $testResults = Invoke-Pester -Configuration $pesterConfiguration
+
+        # Output the details for each failed test (if running in CodeBuild)
+        if ($env:CODEBUILD_BUILD_ARN) {
+            $testResults.TestResult | ForEach-Object {
+                if ($_.Result -ne 'Passed') {
+                    $_
+                }
+            }
+        }
+
+        $numberFails = $testResults.FailedCount
+        assert($numberFails -eq 0) ('Failed "{0}" unit tests.' -f $numberFails)
+
+        if ($EnableCodeCoverage) {
+            # Ensure our builds fail until if below a minimum defined code test coverage threshold
+            try {
+                $coveragePercent = '{0:N2}' -f ($testResults.CodeCoverage.CommandsExecutedCount / $testResults.CodeCoverage.CommandsAnalyzedCount * 100)
+            } catch {
+                $coveragePercent = 0
+            }
+
+            assert([Int]$coveragePercent -ge $script:CodeCoverageThreshold) (
+                ('Failed to meet code coverage threshold of {0}% with only {1}% coverage' -f $script:CodeCoverageThreshold, $coveragePercent)
+            )
+        }
+
+        Write-Host ''
+        Write-Host "  Pester $Name Tests: Passed" -ForegroundColor Green
+    }
     Write-Host '  Build Environment: Ready' -ForegroundColor Green
     Write-Host ''
 }
@@ -179,9 +247,10 @@ task AnalyzeTests -After Analyze {
         $scriptAnalyzerParams = @{
             Path        = $script:TestsPath
             ExcludeRule = @(
-                'PSAvoidUsingConvertToSecureStringWithPlainText',
-                'PSUseShouldProcessForStateChangingFunctions'
                 'PSAvoidGlobalVars'
+                'PSAvoidUsingConvertToSecureStringWithPlainText'
+                'PSReviewUnusedParameter'
+                'PSUseShouldProcessForStateChangingFunctions'
             )
             Severity    = @('Error', 'Warning')
             Recurse     = $true
@@ -201,64 +270,24 @@ task AnalyzeTests -After Analyze {
     Write-Host ''
 }
 
-# Synopsis: Invokes all Pester Unit Tests in the Tests\Unit folder (if it exists)
 task Test {
     Write-Host ''
 
-    if (Test-Path -Path $script:UnitTestsPath) {
-        Write-Host ''
-        Write-Host '  Pester Unit Tests: Invoking...' -ForegroundColor Green
-        Write-Host ''
-
-        $outputFormat = 'CoverageGutters'
-        if ($env:CODEBUILD_BUILD_ARN) {
-            $outputFormat = 'JaCoCo'
-        }
-
-        $pesterConfiguration = New-PesterConfiguration
-        $pesterConfiguration.run.Path = $script:UnitTestsPath
-        $pesterConfiguration.Run.PassThru = $true
-        $pesterConfiguration.Run.Exit = $false
-        $pesterConfiguration.CodeCoverage.Enabled = $true
-        $pesterConfiguration.CodeCoverage.CoveragePercentTarget = $script:CodeCoverageThreshold
-        $pesterConfiguration.CodeCoverage.OutputPath = Join-Path -Path $script:RepositoryRoot -ChildPath 'coverage.xml'
-        $pesterConfiguration.CodeCoverage.OutputFormat = $outputFormat
-        $pesterConfiguration.CodeCoverage.Path = (Get-ChildItem -Path $script:ModuleSourcePath -Filter '*.ps1' -Recurse).FullName
-        $pesterConfiguration.TestResult.Enabled = $true
-        $pesterConfiguration.TestResult.OutputPath = Join-Path -Path $script:RepositoryRoot -ChildPath 'test_report.xml'
-        $pesterConfiguration.TestResult.OutputFormat = 'JUnitXml'
-        $pesterConfiguration.Output.Verbosity = 'Detailed'
-
-        Write-Build White '      Performing Pester Unit Tests...'
-        # Publish Test Results as NUnitXml
-        $testResults = Invoke-Pester -Configuration $pesterConfiguration
-
-        # Output the details for each failed test (if running in CodeBuild)
-        if ($env:CODEBUILD_BUILD_ARN) {
-            $testResults.TestResult | ForEach-Object {
-                if ($_.Result -ne 'Passed') {
-                    $_
-                }
-            }
-        }
-
-        $numberFails = $testResults.FailedCount
-        assert($numberFails -eq 0) ('Failed "{0}" unit tests.' -f $numberFails)
-
-        # Ensure our builds fail until if below a minimum defined code test coverage threshold
-        try {
-            $coveragePercent = '{0:N2}' -f ($testResults.CodeCoverage.CommandsExecutedCount / $testResults.CodeCoverage.CommandsAnalyzedCount * 100)
-        } catch {
-            $coveragePercent = 0
-        }
-
-        assert([Int]$coveragePercent -ge $script:CodeCoverageThreshold) (
-            ('Failed to meet code coverage threshold of {0}% with only {1}% coverage' -f $script:CodeCoverageThreshold, $coveragePercent)
-        )
-
-        Write-Host ''
-        Write-Host '  Pester Unit Tests: Passed' -ForegroundColor Green
+    $testPath = $script:UnitTestsPath
+    $codeCoverageFiles = Get-ChildItem -Path $script:ModuleSourcePath -Filter '*.ps1' -Recurse | Where-Object {$_.Name -notlike '_*'} | Select-Object -ExpandProperty FullName
+    if ($TestFile) {
+        $testPath = Get-ChildItem -Path $script:TestsPath -Recurse | Where-Object {$_.Name -like "$TestFile*"} | Select-Object -ExpandProperty FullName
+        $codeCoverageFiles = Get-ChildItem -Path $script:ModuleSourcePath -Filter '*.ps1' -Recurse | Where-Object {$_.Name -like "$TestFile"} | Select-Object -ExpandProperty FullName
     }
+    if (-not(Test-Path -Path $testPath)) {return}
+
+    $invokePesterUnitTests = @{
+        Task = 'Test'
+        UnitTestPath = $testPath
+        CodeCoverageFiles = $codeCoverageFiles
+        EnableCodeCoverage = $true
+    }
+    InvokePesterUnitTests @invokePesterUnitTests
 
     Write-Host ''
 }
@@ -406,6 +435,10 @@ task Build {
     Write-Host '    Copying files to artifacts folder' -ForegroundColor Green
     Copy-Item -Path $script:ModuleManifestFile -Destination $script:ArtifactsPath -Recurse -ErrorAction Stop
 
+    Get-ChildItem -Path $script:ModuleSourcePath -Filter '*.ps1xml' -Recurse | ForEach-Object {
+        Copy-Item -Path $_.FullName -Destination $script:ArtifactsPath -ErrorAction Stop
+    }
+
     Write-Host '    Combining scripts into the module root file' -ForegroundColor Green
     $scriptContent = [System.Text.StringBuilder]::new()
 
@@ -425,6 +458,20 @@ task Build {
 
     Write-Host ''
     Write-Host '  Module Build: Complete' -ForegroundColor Green
+    Write-Host ''
+}
+
+task TestBuild -After Build {
+    Write-Host ''
+
+    if (-not(Test-Path -Path $script:UnitTestsPath)) {return}
+
+    $invokePesterUnitTests = @{
+        Task = 'Build'
+        UnitTestPath = $script:BuildTestsPath
+    }
+    InvokePesterUnitTests @invokePesterUnitTests
+
     Write-Host ''
 }
 

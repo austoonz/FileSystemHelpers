@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.5 - 2023-01-17
+
+- Added `Merge-Path`
+
 ## v0.0.4 - 2023-01-01
 
 - Added `New-File` (alias of `touch`)
