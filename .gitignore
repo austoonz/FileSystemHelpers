@@ -1,7 +1,9 @@
-Archive
-Artifacts
-DeploymentArtifacts
+Archive/
+Artifacts/
+DeploymentArtifacts/
 .DS_Store
-.vscode
+.vscode/
 coverage.xml
 test_report.xml
+test-results-*.xml
+site/

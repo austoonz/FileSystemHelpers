@@ -1,0 +1,18 @@
+site_name: FileSystemHelpers - PowerShell Module for file system operations
+site_description: Helper functions for file system operations in PowerShell.
+site_url: https://austoonz.github.io/FileSystemHelpers/
+repo_url: https://github.com/austoonz/FileSystemHelpers
+site_author: Andrew Pearce
+edit_uri: edit/main/docs/
+theme: readthedocs
+copyright: "FileSystemHelpers is licensed under the <a href='https://github.com/austoonz/FileSystemHelpers/blob/main/LICENSE'>MIT license"
+nav:
+  - Home: index.md
+  - Change Log: CHANGELOG.md
+  - Functions:
+    - Get-TempPath: functions/Get-TempPath.md
+    - Merge-Path: functions/Merge-Path.md
+    - New-File: functions/New-File.md
+    - New-TempDirectory: functions/New-TempDirectory.md
+    - New-TempFile: functions/New-TempFile.md
+    - New-TempPath: functions/New-TempPath.md
